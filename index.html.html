@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AttendIQ — Face Recognition Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<!-- SheetJS for Excel export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#060a10;--surface:#0d1520;--surface2:#111d2e;--border:#1e2f45;
+  --accent:#00d4ff;--green:#00ff9d;--red:#ff4757;--warn:#ffa502;--purple:#a29bfe;
+  --text:#e8f4f8;--muted:#4a6580;--muted2:#2a3f55;
+  --fh:'Syne',sans-serif;--fb:'Outfit',sans-serif;--fm:'DM Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,212,255,.03)1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03)1px,transparent 1px);
+  background-size:40px 40px;}
+.layout{display:flex;min-height:100vh;position:relative;z-index:1;}
+
+/* SIDEBAR */
+.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;flex-shrink:0;}
+.logo-area{padding:24px 20px 20px;border-bottom:1px solid var(--border);}
+.logo-mark{font-family:var(--fh);font-size:22px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px;letter-spacing:-1px;}
+.logo-sub{font-size:9px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-top:2px;font-family:var(--fm);}
+nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 13px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--fb);font-size:13px;font-weight:500;text-align:left;transition:all .15s;width:100%;}
+.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.active{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.18);}
+.nav-ic{font-size:15px;width:18px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--accent);color:var(--bg);font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;font-family:var(--fm);}
+.nav-sep{height:1px;background:var(--border);margin:6px 8px;}
+.sidebar-foot{padding:12px 20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);font-family:var(--fm);display:flex;align-items:center;gap:8px;}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 7px var(--green);animation:pulse 2s infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:auto;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:15px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:20;gap:12px;}
+.pg-title{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.5px;}
+.pg-sub{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--fm);}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.active-badge{display:flex;align-items:center;gap:7px;background:rgba(0,255,157,.08);border:1px solid rgba(0,255,157,.2);color:var(--green);padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--fm);}
+.save-indicator{font-size:10px;color:var(--muted);font-family:var(--fm);display:flex;align-items:center;gap:5px;}
+.save-indicator.saved{color:var(--green);}
+.content{padding:24px 28px;flex:1;}
+.page{display:none;}.page.active{display:block;}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--c);}
+.stat-card:hover{border-color:var(--c);}
+.stat-icon{font-size:18px;margin-bottom:8px;}
+.stat-val{font-family:var(--fh);font-size:32px;font-weight:800;letter-spacing:-2px;line-height:1;}
+.stat-lbl{font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:1px;font-family:var(--fm);}
+
+/* SECTION */
+.section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+.sec-title{font-family:var(--fh);font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.emp-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--border);}
+.emp-row:last-child{border-bottom:none;}
+
+/* AVATAR */
+.avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#000;flex-shrink:0;font-family:var(--fh);}
+.face-thumb{border-radius:50%;object-fit:cover;flex-shrink:0;}
+
+/* BADGES */
+.badge{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.8px;font-family:var(--fm);text-transform:uppercase;}
+.badge-in{background:rgba(0,255,157,.1);color:var(--green);border:1px solid rgba(0,255,157,.25);}
+.badge-out{background:rgba(255,71,87,.1);color:var(--red);border:1px solid rgba(255,71,87,.25);}
+.badge-away{background:rgba(74,101,128,.12);color:var(--muted);border:1px solid var(--border);}
+
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-family:var(--fb);font-size:13px;font-weight:600;transition:all .15s;letter-spacing:.2px;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--accent);color:var(--bg);}.btn-primary:hover{filter:brightness(1.1);}
+.btn-green{background:var(--green);color:#000;}.btn-green:hover{filter:brightness(1.05);}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-purple{background:var(--purple);color:#000;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+
+/* INPUTS */
+.form-group{margin-bottom:14px;}
+.form-label{display:block;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:5px;font-family:var(--fm);}
+.form-input{width:100%;padding:9px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:13px;outline:none;transition:border-color .2s;}
+.form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,255,.07);}
+.form-input::placeholder{color:var(--muted2);}
+.error-box{background:rgba(255,71,87,.08);border:1px solid rgba(255,71,87,.3);color:var(--red);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:14px;}
+.info-box{background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.2);color:var(--accent);padding:9px 12px;border-radius:8px;font-size:11px;margin-bottom:14px;font-family:var(--fm);line-height:1.6;}
+
+/* SCANNER */
+.scan-layout{display:grid;grid-template-columns:400px 1fr;gap:18px;}
+.mode-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px;gap:3px;width:fit-content;margin-bottom:18px;}
+.mode-btn{padding:8px 24px;border-radius:7px;border:none;cursor:pointer;font-family:var(--fb);font-size:13px;font-weight:600;background:transparent;color:var(--muted);transition:all .2s;}
+.mode-btn.m-in{background:var(--green);color:#000;}
+.mode-btn.m-out{background:var(--red);color:#fff;}
+.scan-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;}
+.cam-wrap{width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;border:1px solid var(--border);position:relative;overflow:hidden;margin-bottom:12px;}
+.cam-wrap video,.cam-wrap canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;}
+.cam-wrap canvas{pointer-events:none;}
+.cam-idle-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-family:var(--fm);font-size:12px;}
+.cam-idle-screen .ick{font-size:48px;opacity:.2;}
+.sc-corners span{position:absolute;width:26px;height:26px;border-style:solid;border-width:0;border-color:var(--accent);}
+.sc-tl{top:9px;left:9px;border-top-width:3px;border-left-width:3px;border-radius:3px 0 0 0;}
+.sc-tr{top:9px;right:9px;border-top-width:3px;border-right-width:3px;border-radius:0 3px 0 0;}
+.sc-bl{bottom:9px;left:9px;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 3px;}
+.sc-br{bottom:9px;right:9px;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 3px 0;}
+.cam-lbl{position:absolute;bottom:9px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.78);border:1px solid var(--border);border-radius:20px;padding:3px 13px;font-size:10px;font-family:var(--fm);color:var(--muted);white-space:nowrap;z-index:5;}
+.cam-lbl.scanning{color:var(--accent);border-color:rgba(0,212,255,.3);}
+.cam-lbl.matched{color:var(--green);border-color:rgba(0,255,157,.35);}
+.cam-lbl.nomatch{color:var(--red);border-color:rgba(255,71,87,.3);}
+.model-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:11px;font-family:var(--fm);}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot-loading{background:var(--warn);animation:pulse 1s infinite;}
+.dot-ready{background:var(--green);box-shadow:0 0 6px var(--green);}
+.dot-error{background:var(--red);}
+.cam-btn-row{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;}
+.face-result{background:var(--surface2);border-radius:10px;padding:16px;display:flex;align-items:center;gap:14px;margin-top:12px;animation:slideUp .3s ease;border-left:3px solid;}
+.face-result.in{border-color:var(--green);}
+.face-result.out{border-color:var(--red);}
+.face-result.warn{border-color:var(--warn);}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.emp-face-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;display:flex;align-items:center;gap:11px;margin-bottom:8px;cursor:default;}
+.emp-face-grid{max-height:420px;overflow-y:auto;padding-right:4px;}
+
+/* ADD EMPLOYEE */
+.add-layout{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;}
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:26px;}
+.form-title{font-family:var(--fh);font-size:20px;font-weight:800;letter-spacing:-.5px;margin-bottom:2px;}
+.form-subtitle{font-size:11px;color:var(--muted);margin-bottom:20px;font-family:var(--fm);}
+.reg-cam-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;}
+.reg-viewport{width:100%;aspect-ratio:1;background:#000;border-radius:9px;border:1px solid var(--border);position:relative;overflow:hidden;margin-bottom:10px;}
+.reg-viewport video,.reg-viewport canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:9px;}
+.reg-viewport .reg-idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:var(--muted);font-family:var(--fm);font-size:11px;}
+.face-status{background:var(--surface2);border-radius:7px;padding:7px 11px;font-size:11px;font-family:var(--fm);margin-bottom:10px;color:var(--muted);}
+.face-status.detecting{color:var(--accent);}
+.face-status.good{color:var(--green);}
+.face-status.bad{color:var(--red);}
+.captured-faces{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;}
+.captured-thumb{width:48px;height:48px;border-radius:7px;object-fit:cover;border:2px solid var(--green);position:relative;}
+.thumb-del{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;border:none;border-radius:50%;width:15px;height:15px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* EMPLOYEES */
+.emp-cards{display:flex;flex-direction:column;gap:9px;}
+.emp-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:16px;cursor:pointer;transition:border-color .18s;}
+.emp-card:hover{border-color:rgba(0,212,255,.3);}
+.emp-card-top{display:flex;align-items:center;gap:12px;}
+.emp-card-expand{margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:none;}
+.emp-card.expanded .emp-card-expand{display:block;}
+.face-strip{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+.face-strip img{width:40px;height:40px;border-radius:6px;object-fit:cover;border:1.5px solid var(--border);}
+
+/* LOGS */
+.log-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.filter-input{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;padding:7px 12px;outline:none;width:200px;}
+.filter-input:focus{border-color:var(--accent);}
+.export-group{display:flex;gap:6px;margin-left:auto;}
+.log-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.log-table{width:100%;border-collapse:collapse;}
+.log-table th{padding:9px 12px;text-align:left;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-family:var(--fm);border-bottom:1px solid var(--border);background:var(--surface2);}
+.log-table td{padding:10px 12px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.log-table tr:last-child td{border-bottom:none;}
+.log-table tr:hover td{background:rgba(0,212,255,.015);}
+
+/* EXPORT / SETTINGS */
+.export-page-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.export-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;}
+.export-card h3{font-family:var(--fh);font-size:16px;font-weight:700;margin-bottom:6px;}
+.export-card p{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;}
+.export-icon{font-size:32px;margin-bottom:12px;}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);}
+.settings-row:last-child{border-bottom:none;}
+.settings-label{font-size:13px;font-weight:600;}
+.settings-sub{font-size:11px;color:var(--muted);font-family:var(--fm);margin-top:2px;}
+.storage-bar-wrap{background:var(--bg);border-radius:6px;height:6px;overflow:hidden;margin-top:8px;}
+.storage-bar{height:6px;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:6px;transition:width .5s;}
+.data-info{background:var(--surface2);border-radius:8px;padding:12px;font-family:var(--fm);font-size:11px;color:var(--muted);line-height:1.8;}
+.backup-list{display:flex;flex-direction:column;gap:7px;max-height:180px;overflow-y:auto;}
+.backup-item{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;display:flex;align-items:center;gap:10px;font-size:12px;}
+
+/* TOAST */
+#toast{position:fixed;top:16px;right:16px;padding:11px 16px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--fb);z-index:9999;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:300px;border-left:3px solid;animation:slideUp .3s ease;}
+.t-success{background:#0d1f1a;color:var(--green);border-color:var(--green);}
+.t-error{background:#1f0d0e;color:var(--red);border-color:var(--red);}
+.t-warn{background:#1f1a0d;color:var(--warn);border-color:var(--warn);}
+.t-info{background:#0d1520;color:var(--accent);border-color:var(--accent);}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;width:440px;max-width:90vw;animation:slideUp .25s ease;}
+.modal h3{font-family:var(--fh);font-size:18px;margin-bottom:6px;}
+.modal p{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+.row-flex{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.spacer{flex:1;}
+.empty{text-align:center;color:var(--muted);padding:26px;font-size:13px;font-family:var(--fm);}
+.emp-name{font-weight:600;font-size:13.5px;}
+.emp-meta{font-size:11px;color:var(--muted);margin-top:1px;font-family:var(--fm);}
+.time-val{font-size:12px;font-weight:600;font-family:var(--fm);}
+.loc-tag{font-size:10px;color:var(--muted);}
+
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- Confirm Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-title">Confirm</h3>
+    <p id="modal-msg">Are you sure?</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar">
+  <div class="logo-area">
+    <div class="logo-mark">👁 AttendIQ</div>
+    <div class="logo-sub">Face Recognition v2</div>
+  </div>
+  <nav>
+    <button class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-ic">◈</span>Dashboard<span class="nav-badge" id="nb-active">0</span></button>
+    <button class="nav-item" onclick="showPage('scan',this)"><span class="nav-ic">👁</span>Face Scanner</button>
+    <button class="nav-item" onclick="showPage('employees',this)"><span class="nav-ic">◉</span>Employees</button>
+    <button class="nav-item" onclick="showPage('add',this)"><span class="nav-ic">＋</span>Add Employee</button>
+    <div class="nav-sep"></div>
+    <button class="nav-item" onclick="showPage('logs',this)"><span class="nav-ic">≡</span>Attendance Log</button>
+    <button class="nav-item" onclick="showPage('export',this)"><span class="nav-ic">↓</span>Export Data</button>
+    <button class="nav-item" onclick="showPage('settings',this)"><span class="nav-ic">⚙</span>Settings & Backup</button>
+  </nav>
+  <div class="sidebar-foot">
+    <div class="pulse"></div>
+    <span id="foot-save-txt">Auto-save on</span>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="pg-title" id="page-title">Overview</div>
+      <div class="pg-sub" id="page-date"></div>
+    </div>
+    <div class="topbar-right">
+      <div class="save-indicator" id="save-indicator">💾 Saved</div>
+      <div class="active-badge"><div class="pulse"></div><span id="hdr-active">0</span>&nbsp;Active</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── DASHBOARD ── -->
+    <div id="page-dashboard" class="page active">
+      <div class="stats-grid">
+        <div class="stat-card" style="--c:#00d4ff"><div class="stat-icon">👥</div><div class="stat-val" id="st-total">0</div><div class="stat-lbl">Total Employees</div></div>
+        <div class="stat-card" style="--c:#00ff9d"><div class="stat-icon">✅</div><div class="stat-val" id="st-present">0</div><div class="stat-lbl">Present Today</div></div>
+        <div class="stat-card" style="--c:#ffa502"><div class="stat-icon">⏱</div><div class="stat-val" id="st-active">0</div><div class="stat-lbl">Clocked In Now</div></div>
+        <div class="stat-card" style="--c:#ff4757"><div class="stat-icon">🏢</div><div class="stat-val" id="st-depts">0</div><div class="stat-lbl">Departments</div></div>
+      </div>
+      <div class="section">
+        <div class="sec-title">Currently Clocked In</div>
+        <div id="dash-active-list"><div class="empty">No employees clocked in.</div></div>
+      </div>
+      <div class="section">
+        <div class="sec-title">Recent Activity</div>
+        <div id="dash-recent-list"><div class="empty">No activity recorded yet.</div></div>
+      </div>
+    </div>
+
+    <!-- ── FACE SCANNER ── -->
+    <div id="page-scan" class="page">
+      <div class="model-bar">
+        <div class="dot dot-loading" id="model-dot"></div>
+        <span id="model-text">Loading face recognition models…</span>
+      </div>
+      <div class="mode-toggle">
+        <button class="mode-btn m-in" id="btn-mode-in" onclick="setScanMode('in')">↓ Clock In</button>
+        <button class="mode-btn" id="btn-mode-out" onclick="setScanMode('out')">↑ Clock Out</button>
+      </div>
+      <div class="scan-layout">
+        <div class="scan-panel">
+          <div class="sec-title" id="scan-label">🟢 Clock In — Face Scan</div>
+          <div class="cam-wrap">
+            <div class="cam-idle-screen" id="scan-idle"><div class="ick">👁</div><div>Camera not started</div><div style="font-size:10px;color:var(--muted2)">Click Start Camera</div></div>
+            <video id="scan-video" autoplay playsinline muted style="display:none"></video>
+            <canvas id="scan-canvas" style="display:none"></canvas>
+            <div class="sc-corners"><span class="sc-tl"></span><span class="sc-tr"></span><span class="sc-bl"></span><span class="sc-br"></span></div>
+            <div class="cam-lbl" id="scan-lbl">Camera Off</div>
+          </div>
+          <div class="cam-btn-row">
+            <button class="btn btn-green btn-sm" id="btn-scan-start" onclick="startScanCam()">▶ Start Camera</button>
+            <button class="btn btn-ghost btn-sm" id="btn-scan-stop" onclick="stopScanCam()" style="display:none">■ Stop</button>
+            <button class="btn btn-ghost btn-sm" id="btn-scan-flip" onclick="flipScanCam()" style="display:none">⇄ Flip</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--fm);margin-bottom:8px;">
+            Confidence: <strong style="color:var(--accent)" id="conf-val">60%</strong>
+            <input type="range" min="40" max="90" value="60" style="width:100%;margin-top:4px;accent-color:var(--accent)" oninput="THRESHOLD=1-(this.value/100);document.getElementById('conf-val').textContent=this.value+'%'"/>
+          </div>
+          <div id="scan-result-box"></div>
+        </div>
+        <div class="scan-panel">
+          <div class="sec-title">Enrolled Employees</div>
+          <div class="emp-face-grid" id="scan-emp-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── EMPLOYEES ── -->
+    <div id="page-employees" class="page">
+      <div class="row-flex" style="margin-bottom:16px">
+        <div class="sec-title" style="margin:0;font-size:14px">Employee Directory</div>
+        <div class="spacer"></div>
+        <button class="btn btn-primary btn-sm" onclick="showPage('add',null)">+ Add Employee</button>
+      </div>
+      <div class="emp-cards" id="emp-cards"></div>
+    </div>
+
+    <!-- ── ADD EMPLOYEE ── -->
+    <div id="page-add" class="page">
+      <div class="add-layout">
+        <div class="form-card">
+          <div class="form-title">Register Employee</div>
+          <div class="form-subtitle">// Unique Gmail · Min 3 face captures required</div>
+          <div id="add-error" class="error-box" style="display:none"></div>
+          <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="inp-name" placeholder="e.g. Arjun Mehta"/></div>
+          <div class="form-group"><label class="form-label">Gmail Address (Unique)</label><input class="form-input" id="inp-email" type="email" placeholder="e.g. arjun@gmail.com"/></div>
+          <div class="form-group"><label class="form-label">Department</label><input class="form-input" id="inp-dept" placeholder="e.g. Engineering"/></div>
+          <div class="form-group"><label class="form-label">Role</label><input class="form-input" id="inp-role" placeholder="e.g. Software Engineer"/></div>
+          <div class="info-box">📸 Capture at least <strong>3 face photos</strong> from the camera panel →<br>Vary angles slightly for better accuracy.</div>
+          <div class="row-flex">
+            <button class="btn btn-ghost" onclick="showPage('employees',null)">Cancel</button>
+            <button class="btn btn-primary" onclick="addEmployee()">✓ Create Employee</button>
+          </div>
+        </div>
+        <div class="reg-cam-wrap">
+          <div class="sec-title" style="font-size:11px;margin-bottom:12px">📷 Face Enrollment</div>
+          <div class="reg-viewport" id="reg-viewport">
+            <div class="reg-idle" id="reg-idle"><div style="font-size:40px;opacity:.18">👤</div><div>Start camera to enroll</div></div>
+            <video id="reg-video" autoplay playsinline muted style="display:none"></video>
+            <canvas id="reg-canvas" style="display:none"></canvas>
+          </div>
+          <div class="face-status" id="reg-status">No face detected</div>
+          <div class="cam-btn-row">
+            <button class="btn btn-green btn-sm" id="btn-reg-start" onclick="startRegCam()">▶ Camera</button>
+            <button class="btn btn-primary btn-sm" id="btn-reg-snap" onclick="snapFace()" style="display:none">📸 Capture</button>
+            <button class="btn btn-ghost btn-sm" id="btn-reg-stop" onclick="stopRegCam()" style="display:none">■</button>
+          </div>
+          <div style="font-size:10px;color:var(--muted);font-family:var(--fm);margin-bottom:6px">Captured (<span id="snap-count">0</span>/5, min 3):</div>
+          <div class="captured-faces" id="captured-faces"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LOGS ── -->
+    <div id="page-logs" class="page">
+      <div class="log-toolbar">
+        <input class="filter-input" id="log-filter" placeholder="🔍 Search by name, dept…" oninput="renderLogs()"/>
+        <select class="filter-input" id="log-filter-type" style="width:120px" onchange="renderLogs()">
+          <option value="">All Types</option>
+          <option value="in">Clock In</option>
+          <option value="out">Clock Out</option>
+        </select>
+        <select class="filter-input" id="log-filter-date" style="width:140px" onchange="renderLogs()">
+          <option value="">All Dates</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+        </select>
+        <div class="export-group">
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📄 CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportExcel()">📊 Excel</button>
+          <button class="btn btn-primary btn-sm" onclick="exportPDF()">🖨 Print/PDF</button>
+        </div>
+      </div>
+      <div class="log-wrap">
+        <table class="log-table">
+          <thead><tr>
+            <th>Employee</th><th>Type</th><th>Date</th><th>Time</th>
+            <th>Duration</th><th>Location</th><th>Coordinates</th>
+          </tr></thead>
+          <tbody id="log-tbody"></tbody>
+        </table>
+        <div id="log-empty" class="empty">No attendance records.</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--fm);margin-top:10px;text-align:right" id="log-count-txt"></div>
+    </div>
+
+    <!-- ── EXPORT ── -->
+    <div id="page-export" class="page">
+      <div style="margin-bottom:20px">
+        <div class="sec-title" style="font-size:14px">Export & Download Data</div>
+        <div style="font-size:12px;color:var(--muted);font-family:var(--fm)">Export attendance logs and employee records in multiple formats.</div>
+      </div>
+      <div class="export-page-grid">
+        <div class="export-card">
+          <div class="export-icon">📄</div>
+          <h3>CSV Export</h3>
+          <p>Export attendance logs as a comma-separated file. Compatible with Google Sheets, Excel, and any spreadsheet app.</p>
+          <div class="row-flex">
+            <button class="btn btn-ghost" onclick="exportCSV('all')">All Records</button>
+            <button class="btn btn-ghost" onclick="exportCSV('today')">Today</button>
+            <button class="btn btn-ghost" onclick="exportCSV('month')">This Month</button>
+          </div>
+        </div>
+        <div class="export-card">
+          <div class="export-icon">📊</div>
+          <h3>Excel Export (.xlsx)</h3>
+          <p>Export a formatted Excel workbook with separate sheets for attendance logs and employee directory.</p>
+          <div class="row-flex">
+            <button class="btn btn-green" onclick="exportExcel()">Download Excel</button>
+          </div>
+        </div>
+        <div class="export-card">
+          <div class="export-icon">🖨</div>
+          <h3>Print / PDF Report</h3>
+          <p>Open a printable attendance report in a new window. Use your browser's Print → Save as PDF option.</p>
+          <div class="row-flex">
+            <button class="btn btn-primary" onclick="exportPDF()">Open Print View</button>
+          </div>
+        </div>
+        <div class="export-card">
+          <div class="export-icon">👥</div>
+          <h3>Employee Directory</h3>
+          <p>Export the employee directory (without face image data) as CSV or JSON for HR records.</p>
+          <div class="row-flex">
+            <button class="btn btn-ghost" onclick="exportEmployeesCSV()">CSV</button>
+            <button class="btn btn-ghost" onclick="exportEmployeesJSON()">JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS & BACKUP ── -->
+    <div id="page-settings" class="page">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <!-- Storage -->
+        <div class="export-card">
+          <h3 style="margin-bottom:10px">💾 Local Storage</h3>
+          <div class="data-info" id="storage-info">Loading…</div>
+          <div class="storage-bar-wrap" style="margin-top:10px"><div class="storage-bar" id="storage-bar" style="width:0%"></div></div>
+          <div style="font-size:10px;color:var(--muted);font-family:var(--fm);margin-top:4px" id="storage-pct">Calculating…</div>
+          <div class="row-flex" style="margin-top:14px">
+            <button class="btn btn-ghost btn-sm" onclick="refreshStorageInfo()">↻ Refresh</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmClearData()">🗑 Clear All Data</button>
+          </div>
+        </div>
+        <!-- Backup -->
+        <div class="export-card">
+          <h3 style="margin-bottom:10px">📦 Backup & Restore</h3>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">Save a full backup of all data (employees + attendance) as a JSON file. Restore from a previous backup.</p>
+          <div class="row-flex" style="margin-bottom:12px">
+            <button class="btn btn-primary btn-sm" onclick="saveBackup()">⬇ Save Backup</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('restore-input').click()">⬆ Restore</button>
+            <input type="file" id="restore-input" accept=".json" style="display:none" onchange="restoreBackup(event)"/>
+          </div>
+          <div style="font-size:10px;color:var(--muted2);font-family:var(--fm)">Saved backups (this session):</div>
+          <div class="backup-list" id="backup-list" style="margin-top:8px">
+            <div style="font-size:11px;color:var(--muted2);font-family:var(--fm);text-align:center;padding:8px">No backups yet</div>
+          </div>
+        </div>
+        <!-- Auto-save settings -->
+        <div class="export-card">
+          <h3 style="margin-bottom:14px">⚙ Auto-Save Settings</h3>
+          <div class="settings-row">
+            <div><div class="settings-label">Auto-save to Browser</div><div class="settings-sub">Saves all data to localStorage automatically</div></div>
+            <input type="checkbox" id="toggle-autosave" checked onchange="toggleAutoSave()" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer"/>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Save Interval</div><div class="settings-sub">How often data is auto-saved</div></div>
+            <select class="filter-input" style="width:100px;padding:5px 8px" id="save-interval" onchange="updateSaveInterval()">
+              <option value="5000">5 sec</option>
+              <option value="10000" selected>10 sec</option>
+              <option value="30000">30 sec</option>
+              <option value="60000">1 min</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-label">Scan Cooldown</div><div class="settings-sub">Seconds before same face can log again</div></div>
+            <select class="filter-input" style="width:100px;padding:5px 8px" id="cooldown-sel" onchange="MATCH_COOLDOWN=parseInt(this.value)">
+              <option value="3000">3 sec</option>
+              <option value="5000" selected>5 sec</option>
+              <option value="10000">10 sec</option>
+              <option value="30000">30 sec</option>
+            </select>
+          </div>
+        </div>
+        <!-- Install -->
+        <div class="export-card">
+          <h3 style="margin-bottom:10px">🖥 Desktop Installation</h3>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+            To install AttendIQ as a desktop application:<br>
+            <strong style="color:var(--accent)">Option A — Chrome/Edge PWA</strong><br>
+            Open this file in Chrome/Edge → click the install icon (⊕) in the address bar → "Install AttendIQ". It runs as a standalone app with offline support.<br><br>
+            <strong style="color:var(--accent)">Option B — Electron (Windows/Mac/Linux)</strong><br>
+            Download the Electron package below. Requires Node.js installed.
+          </p>
+          <div class="row-flex">
+            <button class="btn btn-primary btn-sm" onclick="downloadElectronPkg()">⬇ Download Electron Package</button>
+          </div>
+          <div class="info-box" style="margin-top:12px;font-size:10px">
+            After download: extract ZIP → run <code>npm install</code> → <code>npm start</code><br>
+            To build installer: <code>npm run build</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .content -->
+</main>
+</div>
+
+<script>
+'use strict';
+// ════════════════════════════════════════════════════════
+//  CONSTANTS & STATE
+// ════════════════════════════════════════════════════════
+const MODELS_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+const EMP_COLORS=['#00d4ff','#00ff9d','#ffa502','#ff6b81','#a29bfe','#fd79a8','#55efc4','#fdcb6e'];
+const STORAGE_KEY='attendiq_v2';
+const PAGE_TITLES={dashboard:'Overview',scan:'Face Scanner',employees:'Employees',add:'Register Employee',logs:'Attendance Log',export:'Export Data',settings:'Settings & Backup'};
+
+let employees=[], logs=[], faceMatcher=null, modelsReady=false;
+let THRESHOLD=0.40, MATCH_COOLDOWN=5000;
+let scanStream=null, scanRaf=null, scanFacing='user', scanMode='in';
+let regStream=null, regRaf=null;
+let capturedDescriptors=[], capturedImages=[];
+let lastMatchId=null, lastMatchTime=0;
+let autoSaveTimer=null, autoSaveEnabled=true, saveInterval=10000;
+let sessionBackups=[];
+
+// ════════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════════
+const uid=()=>Math.random().toString(36).substr(2,9);
+const nowTs=()=>new Date().toISOString();
+const fmtTime=iso=>new Date(iso).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+const fmtDate=iso=>new Date(iso).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+const fmtDur=ms=>{if(!ms||ms<0)return'—';const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return`${h}h ${m}m`;};
+const initials=n=>n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+function showToast(msg,type='success'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className=`t-${type}`; t.style.display='block';
+  clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',3800);
+}
+async function getLocation(){
+  return new Promise(r=>{
+    if(!navigator.geolocation)return r({lat:12.2958,lng:76.6394,city:'Mysuru, KA'});
+    navigator.geolocation.getCurrentPosition(
+      p=>r({lat:p.coords.latitude,lng:p.coords.longitude,city:'Detected'}),
+      ()=>r({lat:12.2958,lng:76.6394,city:'Mysuru, KA'}),
+      {timeout:4000}
+    );
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  LOCALSTORAGE PERSISTENCE
+// ════════════════════════════════════════════════════════
+function saveData(){
+  try{
+    const payload={employees,logs,savedAt:nowTs()};
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(payload));
+    showSaveIndicator();
+  }catch(e){
+    showToast('Storage full — export data to free space','error');
+  }
+}
+
+function loadData(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw)return false;
+    const d=JSON.parse(raw);
+    employees=d.employees||[];
+    logs=d.logs||[];
+    return true;
+  }catch(e){ return false; }
+}
+
+function showSaveIndicator(){
+  const el=document.getElementById('save-indicator');
+  el.textContent='💾 Saved '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  el.className='save-indicator saved';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{ el.className='save-indicator'; el.textContent='💾 Auto-save on'; },3000);
+}
+
+function startAutoSave(){
+  if(autoSaveTimer) clearInterval(autoSaveTimer);
+  if(!autoSaveEnabled) return;
+  autoSaveTimer=setInterval(()=>{ saveData(); },saveInterval);
+}
+function toggleAutoSave(){
+  autoSaveEnabled=document.getElementById('toggle-autosave').checked;
+  autoSaveEnabled ? startAutoSave() : clearInterval(autoSaveTimer);
+  showToast('Auto-save '+(autoSaveEnabled?'enabled':'disabled'));
+}
+function updateSaveInterval(){
+  saveInterval=parseInt(document.getElementById('save-interval').value);
+  startAutoSave();
+}
+
+// ════════════════════════════════════════════════════════
+//  FACE-API MODELS
+// ════════════════════════════════════════════════════════
+async function loadModels(){
+  try{
+    setModelStatus('loading','Loading face recognition models…');
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_URL),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODELS_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_URL),
+    ]);
+    modelsReady=true;
+    setModelStatus('ready','✓ Face recognition ready');
+    rebuildMatcher();
+    showToast('Face recognition models loaded ✓','info');
+  }catch(e){
+    setModelStatus('error','✗ Model load failed — check internet connection');
+    showToast('Failed to load models','error');
+  }
+}
+function setModelStatus(s,m){
+  document.getElementById('model-text').textContent=m;
+  document.getElementById('model-dot').className='dot '+(s==='loading'?'dot-loading':s==='ready'?'dot-ready':'dot-error');
+}
+function rebuildMatcher(){
+  const labeled=employees.filter(e=>e.faceDescriptors?.length>0)
+    .map(e=>new faceapi.LabeledFaceDescriptors(e.id,e.faceDescriptors.map(d=>new Float32Array(d))));
+  faceMatcher=labeled.length?new faceapi.FaceMatcher(labeled,THRESHOLD):null;
+}
+
+// ════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════
+function showPage(name,btn){
+  if(document.getElementById('page-scan')?.classList.contains('active')&&name!=='scan') stopScanCam();
+  if(document.getElementById('page-add')?.classList.contains('active')&&name!=='add')  stopRegCam();
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  else document.querySelectorAll('.nav-item').forEach(b=>{ if(b.getAttribute('onclick')?.includes(`'${name}'`))b.classList.add('active'); });
+  document.getElementById('page-title').textContent=PAGE_TITLES[name]||'';
+  if(name==='dashboard')renderDashboard();
+  if(name==='employees')renderEmployees();
+  if(name==='scan')renderScanEmpList();
+  if(name==='logs')renderLogs();
+  if(name==='settings')refreshStorageInfo();
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════
+const activeSessions=()=>logs.filter(l=>l.type==='in'&&!l.pairedOut);
+const isLoggedIn=id=>activeSessions().some(s=>s.empId===id);
+
+function faceImg(emp,size=40,style=''){
+  return emp.faceImages?.[0]
+    ?`<img class="face-thumb" src="${emp.faceImages[0]}" style="width:${size}px;height:${size}px;border:2px solid ${emp.color};${style}">`
+    :`<div class="avatar" style="background:${emp.color};color:#000;width:${size}px;height:${size}px;font-size:${Math.floor(size*.4)}px;${style}">${initials(emp.name)}</div>`;
+}
+
+function renderDashboard(){
+  const active=activeSessions();
+  const today=new Date().toDateString();
+  const todayIds=[...new Set(logs.filter(l=>new Date(l.ts).toDateString()===today).map(l=>l.empId))];
+  const depts=[...new Set(employees.map(e=>e.dept))];
+  document.getElementById('st-total').textContent=employees.length;
+  document.getElementById('st-present').textContent=todayIds.length;
+  document.getElementById('st-active').textContent=active.length;
+  document.getElementById('st-depts').textContent=depts.length;
+  document.getElementById('nb-active').textContent=active.length;
+  document.getElementById('hdr-active').textContent=active.length;
+
+  const al=document.getElementById('dash-active-list');
+  al.innerHTML=active.length?active.map(s=>{
+    const e=employees.find(x=>x.id===s.empId);if(!e)return'';
+    return`<div class="emp-row">${faceImg(e)}
+      <div style="flex:1"><div class="emp-name">${e.name}</div><div class="emp-meta">${e.dept}·${e.role}</div></div>
+      <div style="text-align:right"><div class="time-val">In: ${fmtTime(s.ts)}</div><div class="loc-tag">📍${s.loc.city}</div></div>
+    </div>`;
+  }).join(''):'<div class="empty">No employees clocked in.</div>';
+
+  const rl=document.getElementById('dash-recent-list');
+  rl.innerHTML=logs.length?[...logs].reverse().slice(0,8).map(l=>{
+    const e=employees.find(x=>x.id===l.empId);if(!e)return'';
+    return`<div class="emp-row">
+      <div style="width:7px;height:7px;border-radius:50%;background:${l.type==='in'?'var(--green)':'var(--red)'};flex-shrink:0"></div>
+      ${faceImg(e,32)}
+      <div style="flex:1"><span class="emp-name">${e.name}</span><span class="badge ${l.type==='in'?'badge-in':'badge-out'}" style="margin-left:7px">${l.type==='in'?'IN':'OUT'}</span></div>
+      <div style="text-align:right"><div class="time-val">${fmtTime(l.ts)}</div><div class="loc-tag">📍${l.loc.city}</div></div>
+    </div>`;
+  }).join(''):'<div class="empty">No activity yet.</div>';
+}
+
+// ════════════════════════════════════════════════════════
+//  SCAN PAGE
+// ════════════════════════════════════════════════════════
+function renderScanEmpList(){
+  const list=document.getElementById('scan-emp-list');
+  const eligible=employees.filter(e=>e.faceDescriptors?.length>0);
+  if(!eligible.length){list.innerHTML='<div class="empty">No enrolled employees.<br>Add employees with face photos first.</div>';return;}
+  list.innerHTML=eligible.map(e=>{
+    const on=isLoggedIn(e.id);
+    return`<div class="emp-face-card">${faceImg(e,42,`border:2px solid ${e.color};`)}
+      <div style="flex:1"><div class="emp-name">${e.name}</div><div class="emp-meta">${e.dept}·${e.role}</div>
+      <div style="font-size:10px;color:var(--muted2);font-family:var(--fm)">${e.faceDescriptors.length} samples</div></div>
+      <span class="badge ${on?'badge-in':'badge-away'}">${on?'● In':'○ Away'}</span>
+    </div>`;
+  }).join('');
+}
+
+function setScanMode(m){
+  scanMode=m;
+  document.getElementById('btn-mode-in').className='mode-btn'+(m==='in'?' m-in':'');
+  document.getElementById('btn-mode-out').className='mode-btn'+(m==='out'?' m-out':'');
+  document.getElementById('scan-label').textContent=m==='in'?'🟢 Clock In — Face Scan':'🔴 Clock Out — Face Scan';
+  document.getElementById('scan-result-box').innerHTML='';
+}
+
+async function startScanCam(){
+  if(!modelsReady){showToast('Models still loading…','warn');return;}
+  try{
+    if(scanStream)stopScanCam();
+    scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:scanFacing,width:{ideal:640},height:{ideal:480}},audio:false});
+    const v=document.getElementById('scan-video');
+    v.srcObject=scanStream;v.style.display='block';
+    document.getElementById('scan-idle').style.display='none';
+    document.getElementById('btn-scan-start').style.display='none';
+    document.getElementById('btn-scan-stop').style.display='';
+    document.getElementById('btn-scan-flip').style.display='';
+    setLbl('Detecting face…','scanning');
+    v.onloadedmetadata=()=>{v.play();scanTick();};
+  }catch(e){showToast(e.name==='NotAllowedError'?'Camera permission denied':'Camera error: '+e.message,'error');}
+}
+function stopScanCam(){
+  if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
+  if(scanRaf){cancelAnimationFrame(scanRaf);scanRaf=null;}
+  const v=document.getElementById('scan-video');
+  v.srcObject=null;v.style.display='none';
+  document.getElementById('scan-idle').style.display='flex';
+  ['btn-scan-start'].forEach(id=>document.getElementById(id).style.display='');
+  ['btn-scan-stop','btn-scan-flip'].forEach(id=>document.getElementById(id).style.display='none');
+  setLbl('Camera Off','');
+}
+async function flipScanCam(){scanFacing=scanFacing==='user'?'environment':'user';await startScanCam();}
+function setLbl(msg,cls){const el=document.getElementById('scan-lbl');el.textContent=msg;el.className='cam-lbl'+(cls?' '+cls:'');}
+
+async function scanTick(){
+  const v=document.getElementById('scan-video');
+  if(!scanStream||v.readyState<2){scanRaf=requestAnimationFrame(scanTick);return;}
+  const opts=new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.4});
+  const dets=await faceapi.detectAllFaces(v,opts).withFaceLandmarks(true).withFaceDescriptors();
+  const canvas=document.getElementById('scan-canvas');
+  faceapi.matchDimensions(canvas,{width:v.videoWidth,height:v.videoHeight});
+  canvas.style.display='block';
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  const resized=faceapi.resizeResults(dets,{width:v.videoWidth,height:v.videoHeight});
+  if(!dets.length){setLbl('No face — look at camera','scanning');scanRaf=requestAnimationFrame(scanTick);return;}
+  setLbl('Matching…','scanning');
+  for(const d of resized){
+    const box=d.detection.box;
+    if(faceMatcher){
+      const match=faceMatcher.findBestMatch(d.descriptor);
+      const hit=match.label!=='unknown';
+      drawBox(ctx,box,hit?'#00ff9d':'#ff4757',hit?(employees.find(e=>e.id===match.label)?.name||match.label):'Unknown');
+      if(hit){
+        const t=Date.now();
+        if(match.label!==lastMatchId||(t-lastMatchTime)>MATCH_COOLDOWN){
+          lastMatchId=match.label;lastMatchTime=t;
+          setLbl('✓ Matched!','matched');
+          await processRecognition(match.label);
+        } else {
+          setLbl('✓ '+(employees.find(e=>e.id===match.label)?.name||'')+'  (cooldown)','matched');
+        }
+      } else {setLbl('Face not recognised','nomatch');}
+    } else {
+      drawBox(ctx,box,'#ffa502','No employees enrolled');
+      setLbl('No employees enrolled','nomatch');
+    }
+  }
+  scanRaf=requestAnimationFrame(scanTick);
+}
+function drawBox(ctx,box,color,label){
+  ctx.strokeStyle=color;ctx.lineWidth=3;ctx.strokeRect(box.x,box.y,box.width,box.height);
+  const lw=Math.max(box.width,label.length*8+16);
+  ctx.fillStyle=color+'cc';ctx.fillRect(box.x,box.y-24,lw,24);
+  ctx.fillStyle='#000';ctx.font='bold 12px Outfit,sans-serif';ctx.fillText(label,box.x+7,box.y-7);
+}
+
+async function processRecognition(empId){
+  const emp=employees.find(e=>e.id===empId);if(!emp)return;
+  const loc=await getLocation();const ts=nowTs();
+  if(scanMode==='in'){
+    if(isLoggedIn(emp.id)){showScanResult(emp,'already',ts,loc,null);return;}
+    logs.push({id:uid(),empId:emp.id,type:'in',ts,loc,pairedOut:null,method:'face'});
+    showToast(`✓ ${emp.name} clocked IN`);
+  } else {
+    const sess=[...logs].reverse().find(l=>l.empId===emp.id&&l.type==='in'&&!l.pairedOut);
+    if(!sess){showScanResult(emp,'notin',ts,loc,null);return;}
+    const dur=new Date(ts)-new Date(sess.ts);
+    const entry={id:uid(),empId:emp.id,type:'out',ts,loc,pairedIn:sess.id,method:'face'};
+    sess.pairedOut=entry.id;logs.push(entry);
+    showToast(`✓ ${emp.name} clocked OUT — ${fmtDur(dur)}`);
+    showScanResult(emp,'out',ts,loc,dur);
+    renderDashboard();renderScanEmpList();saveData();return;
+  }
+  showScanResult(emp,scanMode,ts,loc,null);
+  renderDashboard();renderScanEmpList();saveData();
+}
+function showScanResult(emp,type,ts,loc,dur){
+  const map={in:{cls:'in',icon:'🟢',lbl:'CLOCKED IN'},out:{cls:'out',icon:'🔴',lbl:'CLOCKED OUT'},already:{cls:'warn',icon:'🟡',lbl:'ALREADY IN'},notin:{cls:'warn',icon:'🟡',lbl:'NOT CLOCKED IN'}};
+  const t=map[type]||map.in;
+  document.getElementById('scan-result-box').innerHTML=`
+    <div class="face-result ${t.cls}">
+      ${faceImg(emp,52,'')}
+      <div style="flex:1">
+        <div style="font-family:var(--fh);font-size:16px;font-weight:700">${emp.name}</div>
+        <div class="emp-meta">${emp.dept}·${emp.role}</div>
+        <div style="font-size:12px;margin-top:5px"><span style="font-weight:700;color:${type==='in'?'var(--green)':type==='out'?'var(--red)':'var(--warn)'}">${t.icon} ${t.lbl}</span>
+          ${type==='in'||type==='out'?` at ${fmtTime(ts)}`:''}
+          ${dur?`<span style="color:var(--muted)"> · ${fmtDur(dur)}</span>`:''}
+        </div>
+        <div style="font-size:10px;color:var(--muted2);font-family:var(--fm);margin-top:2px">📍${loc.city} (${loc.lat.toFixed(4)},${loc.lng.toFixed(4)})</div>
+      </div>
+      <div style="font-size:32px">${t.icon}</div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════
+//  REGISTRATION CAMERA
+// ════════════════════════════════════════════════════════
+let lastRegDet=null;
+async function startRegCam(){
+  if(!modelsReady){showToast('Models loading…','warn');return;}
+  try{
+    if(regStream)stopRegCam();
+    regStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:480},height:{ideal:480}},audio:false});
+    const v=document.getElementById('reg-video');
+    v.srcObject=regStream;v.style.display='block';
+    document.getElementById('reg-idle').style.display='none';
+    document.getElementById('btn-reg-start').style.display='none';
+    document.getElementById('btn-reg-snap').style.display='';
+    document.getElementById('btn-reg-stop').style.display='';
+    v.onloadedmetadata=()=>{v.play();regTick();};
+  }catch(e){showToast(e.name==='NotAllowedError'?'Camera permission denied':'Camera error','error');}
+}
+function stopRegCam(){
+  if(regStream){regStream.getTracks().forEach(t=>t.stop());regStream=null;}
+  if(regRaf){cancelAnimationFrame(regRaf);regRaf=null;}
+  const v=document.getElementById('reg-video');
+  v.srcObject=null;v.style.display='none';
+  document.getElementById('reg-idle').style.display='flex';
+  document.getElementById('btn-reg-start').style.display='';
+  document.getElementById('btn-reg-snap').style.display='none';
+  document.getElementById('btn-reg-stop').style.display='none';
+  setRegSt('Camera stopped','');
+}
+async function regTick(){
+  const v=document.getElementById('reg-video');
+  if(!regStream||v.readyState<2){regRaf=requestAnimationFrame(regTick);return;}
+  const opts=new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.5});
+  const det=await faceapi.detectSingleFace(v,opts).withFaceLandmarks(true).withFaceDescriptor();
+  const canvas=document.getElementById('reg-canvas');
+  faceapi.matchDimensions(canvas,{width:v.videoWidth,height:v.videoHeight});
+  canvas.style.display='block';
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(det){
+    lastRegDet=det;
+    const b=faceapi.resizeResults(det,{width:v.videoWidth,height:v.videoHeight}).detection.box;
+    ctx.strokeStyle='#00ff9d';ctx.lineWidth=3;ctx.strokeRect(b.x,b.y,b.width,b.height);
+    setRegSt('✓ Face detected — click 📸 Capture','good');
+  } else {
+    lastRegDet=null;
+    setRegSt('Position face in frame…','detecting');
+  }
+  regRaf=requestAnimationFrame(regTick);
+}
+function setRegSt(msg,cls){const el=document.getElementById('reg-status');el.textContent=msg;el.className='face-status'+(cls?' '+cls:'');}
+
+async function snapFace(){
+  if(!lastRegDet){showToast('No face in frame','warn');return;}
+  if(capturedImages.length>=5){showToast('Max 5 photos','warn');return;}
+  const v=document.getElementById('reg-video');
+  const off=document.createElement('canvas');off.width=v.videoWidth;off.height=v.videoHeight;
+  off.getContext('2d').drawImage(v,0,0);
+  const b=lastRegDet.detection.box;
+  const pad=Math.max(b.width,b.height)*0.28;
+  const fx=Math.max(0,b.x-pad),fy=Math.max(0,b.y-pad);
+  const fw=Math.min(off.width-fx,b.width+pad*2),fh=Math.min(off.height-fy,b.height+pad*2);
+  const crop=document.createElement('canvas');crop.width=120;crop.height=120;
+  crop.getContext('2d').drawImage(off,fx,fy,fw,fh,0,0,120,120);
+  capturedImages.push(crop.toDataURL('image/jpeg',0.85));
+  capturedDescriptors.push(Array.from(lastRegDet.descriptor));
+  renderSnaps();
+  setRegSt(`✓ Photo ${capturedImages.length} captured!`,'good');
+  showToast(`📸 Photo ${capturedImages.length} captured`);
+}
+function renderSnaps(){
+  document.getElementById('snap-count').textContent=capturedImages.length;
+  document.getElementById('captured-faces').innerHTML=capturedImages.map((img,i)=>
+    `<div style="position:relative"><img src="${img}" class="captured-thumb"/>
+    <button class="thumb-del" onclick="deleteSnap(${i})">✕</button></div>`).join('');
+}
+function deleteSnap(i){capturedImages.splice(i,1);capturedDescriptors.splice(i,1);renderSnaps();}
+
+// ════════════════════════════════════════════════════════
+//  ADD EMPLOYEE
+// ════════════════════════════════════════════════════════
+function resetAddForm(){
+  ['inp-name','inp-email','inp-dept','inp-role'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('add-error').style.display='none';
+  capturedImages=[];capturedDescriptors=[];renderSnaps();stopRegCam();
+}
+async function addEmployee(){
+  const name=document.getElementById('inp-name').value.trim();
+  const email=document.getElementById('inp-email').value.trim();
+  const dept=document.getElementById('inp-dept').value.trim();
+  const role=document.getElementById('inp-role').value.trim();
+  const err=document.getElementById('add-error');err.style.display='none';
+  if(!name||!email||!dept||!role){err.textContent='⚠ All fields required.';err.style.display='block';return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='⚠ Invalid email.';err.style.display='block';return;}
+  if(employees.find(e=>e.email.toLowerCase()===email.toLowerCase())){err.textContent='⚠ Email already exists.';err.style.display='block';return;}
+  if(capturedImages.length<3){err.textContent=`⚠ Capture at least 3 face photos (you have ${capturedImages.length}).`;err.style.display='block';return;}
+  const emp={id:'emp'+uid(),name,email,dept,role,color:EMP_COLORS[employees.length%EMP_COLORS.length],faceDescriptors:[...capturedDescriptors],faceImages:[...capturedImages],createdAt:nowTs()};
+  employees.push(emp);
+  rebuildMatcher();
+  saveData();
+  showToast(`✓ ${name} enrolled with ${capturedImages.length} samples!`);
+  stopRegCam();
+  showPage('employees',null);
+}
+
+// ════════════════════════════════════════════════════════
+//  EMPLOYEES PAGE
+// ════════════════════════════════════════════════════════
+function renderEmployees(){
+  const c=document.getElementById('emp-cards');
+  if(!employees.length){c.innerHTML='<div class="empty">No employees yet.</div>';return;}
+  c.innerHTML='';
+  employees.forEach(emp=>{
+    const on=isLoggedIn(emp.id);
+    const el=document.createElement('div');el.className='emp-card';
+    const empLogs=[...logs].filter(l=>l.empId===emp.id).reverse().slice(0,5);
+    const recentHTML=empLogs.length?empLogs.map(l=>`
+      <div class="emp-row" style="padding:6px 0">
+        <div style="width:6px;height:6px;border-radius:50%;background:${l.type==='in'?'var(--green)':'var(--red)'};flex-shrink:0"></div>
+        <span class="badge ${l.type==='in'?'badge-in':'badge-out'}">${l.type==='in'?'IN':'OUT'}</span>
+        <span style="font-size:11px;color:var(--muted)">${fmtDate(l.ts)} ${fmtTime(l.ts)}</span>
+        <span style="font-size:10px;color:var(--muted2);margin-left:auto">📍${l.loc.city}</span>
+      </div>`).join(''):'<div class="empty" style="padding:8px 0">No records.</div>';
+    const thumbs=emp.faceImages?.length
+      ?`<div class="face-strip">${emp.faceImages.map(fi=>`<img src="${fi}"/>`).join('')}</div>`
+      :'';
+    el.innerHTML=`
+      <div class="emp-card-top">
+        ${faceImg(emp,48,'')}
+        <div style="flex:1"><div class="emp-name">${emp.name}</div><div class="emp-meta">${emp.email}</div><div class="emp-meta">${emp.dept}·${emp.role}</div></div>
+        <div style="text-align:right;display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+          <span class="badge ${on?'badge-in':'badge-away'}">${on?'● In':'○ Away'}</span>
+          <span style="font-size:9px;color:var(--muted);font-family:var(--fm)">${emp.faceDescriptors?.length||0} samples</span>
+          <button class="btn btn-danger btn-sm" style="font-size:10px;padding:4px 9px" onclick="event.stopPropagation();confirmDelete('${emp.id}')">🗑</button>
+        </div>
+      </div>
+      <div class="emp-card-expand">
+        ${thumbs?`<div class="form-label" style="margin-bottom:6px">Face Samples</div>${thumbs}`:''}
+        <div class="form-label" style="margin-top:10px;margin-bottom:6px">Recent Attendance</div>
+        ${recentHTML}
+      </div>`;
+    el.querySelector('.emp-card-top').onclick=()=>el.classList.toggle('expanded');
+    c.appendChild(el);
+  });
+}
+function confirmDelete(empId){
+  const emp=employees.find(e=>e.id===empId);
+  showModal(`Delete ${emp?.name}?`,`This will remove the employee and all ${logs.filter(l=>l.empId===empId).length} attendance records. This cannot be undone.`,()=>{
+    employees=employees.filter(e=>e.id!==empId);
+    logs=logs.filter(l=>l.empId!==empId);
+    rebuildMatcher();saveData();renderEmployees();
+    showToast('Employee deleted','warn');
+  },'Delete');
+}
+
+// ════════════════════════════════════════════════════════
+//  LOGS
+// ════════════════════════════════════════════════════════
+function getFilteredLogs(){
+  const q=(document.getElementById('log-filter')?.value||'').toLowerCase();
+  const typeF=document.getElementById('log-filter-type')?.value||'';
+  const dateF=document.getElementById('log-filter-date')?.value||'';
+  const now=new Date();
+  return [...logs].reverse().filter(l=>{
+    const e=employees.find(x=>x.id===l.empId);if(!e)return false;
+    if(q&&!e.name.toLowerCase().includes(q)&&!e.dept.toLowerCase().includes(q))return false;
+    if(typeF&&l.type!==typeF)return false;
+    if(dateF){
+      const d=new Date(l.ts);
+      if(dateF==='today'&&d.toDateString()!==now.toDateString())return false;
+      if(dateF==='week'){const wStart=new Date(now);wStart.setDate(now.getDate()-now.getDay());if(d<wStart)return false;}
+      if(dateF==='month'&&(d.getMonth()!==now.getMonth()||d.getFullYear()!==now.getFullYear()))return false;
+    }
+    return true;
+  });
+}
+function renderLogs(){
+  const filtered=getFilteredLogs();
+  document.getElementById('log-count-txt').textContent=`Showing ${filtered.length} of ${logs.length} records`;
+  const tbody=document.getElementById('log-tbody');
+  if(!filtered.length){tbody.innerHTML='';document.getElementById('log-empty').style.display='block';return;}
+  document.getElementById('log-empty').style.display='none';
+  tbody.innerHTML=filtered.map(l=>{
+    const e=employees.find(x=>x.id===l.empId);if(!e)return'';
+    let dur='—';
+    if(l.type==='out'&&l.pairedIn){const inn=logs.find(x=>x.id===l.pairedIn);if(inn)dur=fmtDur(new Date(l.ts)-new Date(inn.ts));}
+    return`<tr>
+      <td><div style="display:flex;align-items:center;gap:7px">${faceImg(e,28,'')}
+        <div><div style="font-weight:600;font-size:12px">${e.name}</div><div style="font-size:10px;color:var(--muted)">${e.dept}</div></div></div></td>
+      <td><span class="badge ${l.type==='in'?'badge-in':'badge-out'}">${l.type==='in'?'↓IN':'↑OUT'}</span></td>
+      <td style="font-family:var(--fm);color:var(--muted);font-size:11px">${fmtDate(l.ts)}</td>
+      <td style="font-family:var(--fm);font-weight:600;font-size:12px">${fmtTime(l.ts)}</td>
+      <td style="font-family:var(--fm);color:var(--muted);font-size:11px">${dur}</td>
+      <td style="color:var(--muted);font-size:11px">📍${l.loc.city}</td>
+      <td style="font-family:var(--fm);font-size:10px;color:var(--muted2)">${l.loc.lat.toFixed(4)},${l.loc.lng.toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════
+//  EXPORTS
+// ════════════════════════════════════════════════════════
+function logsToRows(subset){
+  return subset.map(l=>{
+    const e=employees.find(x=>x.id===l.empId)||{name:'Unknown',dept:'',role:''};
+    let dur='';
+    if(l.type==='out'&&l.pairedIn){const inn=logs.find(x=>x.id===l.pairedIn);if(inn)dur=fmtDur(new Date(l.ts)-new Date(inn.ts));}
+    return[e.name,e.dept,e.role,l.type.toUpperCase(),fmtDate(l.ts),fmtTime(l.ts),dur,l.loc?.city||'',l.loc?.lat?.toFixed(4)||'',l.loc?.lng?.toFixed(4)||''];
+  });
+}
+function downloadBlob(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+function exportCSV(range='all'){
+  let subset=[...logs].reverse();
+  const now=new Date();
+  if(range==='today') subset=subset.filter(l=>new Date(l.ts).toDateString()===now.toDateString());
+  if(range==='month') subset=subset.filter(l=>{const d=new Date(l.ts);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
+  const header=['Employee','Department','Role','Type','Date','Time','Duration','Location','Latitude','Longitude'];
+  const rows=[header,...logsToRows(subset)];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob(new Blob([csv],{type:'text/csv'}),`AttendIQ_${range}_${new Date().toISOString().slice(0,10)}.csv`);
+  showToast(`CSV exported (${subset.length} records)`);
+}
+function exportExcel(){
+  if(typeof XLSX==='undefined'){showToast('Excel library not loaded','error');return;}
+  const wb=XLSX.utils.book_new();
+  // Attendance sheet
+  const header=['Employee','Department','Role','Type','Date','Time','Duration','Location','Latitude','Longitude'];
+  const rows=logsToRows([...logs].reverse());
+  const ws1=XLSX.utils.aoa_to_sheet([header,...rows]);
+  ws1['!cols']=[{wch:20},{wch:16},{wch:18},{wch:8},{wch:14},{wch:10},{wch:10},{wch:18},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Attendance Log');
+  // Employees sheet
+  const empHeader=['ID','Name','Email','Department','Role','Face Samples','Registered On'];
+  const empRows=employees.map(e=>[e.id,e.name,e.email,e.dept,e.role,e.faceDescriptors?.length||0,e.createdAt?fmtDate(e.createdAt):'']);
+  const ws2=XLSX.utils.aoa_to_sheet([empHeader,...empRows]);
+  ws2['!cols']=[{wch:14},{wch:20},{wch:28},{wch:16},{wch:18},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Employees');
+  // Summary sheet
+  const today=new Date().toDateString();
+  const todayLogs=logs.filter(l=>new Date(l.ts).toDateString()===today);
+  const ws3=XLSX.utils.aoa_to_sheet([
+    ['AttendIQ — Summary Report'],['Generated',new Date().toLocaleString('en-IN')],[],
+    ['Total Employees',employees.length],['Present Today',[...new Set(todayLogs.map(l=>l.empId))].length],
+    ['Currently Clocked In',activeSessions().length],['Total Log Entries',logs.length],
+  ]);
+  XLSX.utils.book_append_sheet(wb,ws3,'Summary');
+  XLSX.writeFile(wb,`AttendIQ_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+  showToast('Excel file exported!');
+}
+function exportPDF(){
+  const w=window.open('','_blank');
+  const rows=[...logs].reverse();
+  const tableRows=rows.map(l=>{
+    const e=employees.find(x=>x.id===l.empId)||{name:'Unknown',dept:''};
+    let dur='—';
+    if(l.type==='out'&&l.pairedIn){const inn=logs.find(x=>x.id===l.pairedIn);if(inn)dur=fmtDur(new Date(l.ts)-new Date(inn.ts));}
+    return`<tr><td>${e.name}</td><td>${e.dept}</td><td><span class="${l.type==='in'?'in':'out'}">${l.type.toUpperCase()}</span></td>
+      <td>${fmtDate(l.ts)}</td><td>${fmtTime(l.ts)}</td><td>${dur}</td><td>${l.loc?.city||''}</td></tr>`;
+  }).join('');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>AttendIQ Report</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Segoe UI',sans-serif;padding:32px;color:#1e293b;}
+  h1{font-size:24px;font-weight:800;margin-bottom:4px;color:#6366f1;}
+  .sub{font-size:12px;color:#64748b;margin-bottom:24px;}
+  .stats{display:flex;gap:16px;margin-bottom:24px;}
+  .stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 18px;text-align:center;}
+  .sv{font-size:28px;font-weight:800;color:#0f172a;}.sl{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:#f1f5f9;padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;border-bottom:2px solid #e2e8f0;}
+  td{padding:8px 12px;border-bottom:1px solid #f1f5f9;}.in{color:#10b981;font-weight:700;}.out{color:#ef4444;font-weight:700;}
+  tr:hover td{background:#fafafa;}
+  @media print{body{padding:16px;}}
+  </style></head><body>
+  <h1>👁 AttendIQ — Attendance Report</h1>
+  <div class="sub">Generated: ${new Date().toLocaleString('en-IN')} &nbsp;|&nbsp; ${rows.length} total records</div>
+  <div class="stats">
+    <div class="stat"><div class="sv">${employees.length}</div><div class="sl">Employees</div></div>
+    <div class="stat"><div class="sv">${[...new Set(logs.filter(l=>new Date(l.ts).toDateString()===new Date().toDateString()).map(l=>l.empId))].length}</div><div class="sl">Present Today</div></div>
+    <div class="stat"><div class="sv">${activeSessions().length}</div><div class="sl">Currently In</div></div>
+    <div class="stat"><div class="sv">${logs.length}</div><div class="sl">Total Logs</div></div>
+  </div>
+  <table><thead><tr><th>Employee</th><th>Department</th><th>Type</th><th>Date</th><th>Time</th><th>Duration</th><th>Location</th></tr></thead>
+  <tbody>${tableRows||'<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:24px">No records</td></tr>'}</tbody></table>
+  <script>window.onload=()=>window.print();<\/script></body></html>`);
+  w.document.close();
+}
+function exportEmployeesCSV(){
+  const header=['ID','Name','Email','Department','Role','Face Samples','Registered On'];
+  const rows=employees.map(e=>[e.id,e.name,e.email,e.dept,e.role,e.faceDescriptors?.length||0,e.createdAt||'']);
+  const csv=[header,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob(new Blob([csv],{type:'text/csv'}),`AttendIQ_Employees_${new Date().toISOString().slice(0,10)}.csv`);
+  showToast('Employee CSV exported!');
+}
+function exportEmployeesJSON(){
+  const data=employees.map(({id,name,email,dept,role,createdAt,faceDescriptors})=>({id,name,email,dept,role,createdAt,faceSamples:faceDescriptors?.length||0}));
+  downloadBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),`AttendIQ_Employees_${new Date().toISOString().slice(0,10)}.json`);
+  showToast('Employee JSON exported!');
+}
+
+// ════════════════════════════════════════════════════════
+//  SETTINGS & BACKUP
+// ════════════════════════════════════════════════════════
+function refreshStorageInfo(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY)||'{}';
+    const kb=(raw.length*2/1024).toFixed(1);
+    const maxKB=5120;
+    const pct=Math.min(100,(raw.length*2/1024/maxKB*100)).toFixed(1);
+    document.getElementById('storage-info').innerHTML=
+      `Employees: ${employees.length} &nbsp;|&nbsp; Log entries: ${logs.length}<br>
+       Storage used: ${kb} KB / ~5 MB limit<br>
+       Last saved: ${JSON.parse(raw).savedAt?new Date(JSON.parse(raw).savedAt).toLocaleString('en-IN'):'Never'}`;
+    document.getElementById('storage-bar').style.width=pct+'%';
+    document.getElementById('storage-pct').textContent=`${pct}% of localStorage used`;
+  }catch(e){}
+}
+
+function saveBackup(){
+  const backup={version:'2.0',savedAt:new Date().toISOString(),employees,logs};
+  const json=JSON.stringify(backup);
+  downloadBlob(new Blob([json],{type:'application/json'}),`AttendIQ_Backup_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`);
+  sessionBackups.unshift({label:`Backup ${new Date().toLocaleTimeString('en-IN')}`,size:(json.length/1024).toFixed(1)+'KB',ts:Date.now()});
+  renderBackupList();
+  showToast('Backup saved!');
+}
+function renderBackupList(){
+  const list=document.getElementById('backup-list');
+  if(!sessionBackups.length){list.innerHTML='<div style="font-size:11px;color:var(--muted2);font-family:var(--fm);text-align:center;padding:8px">No backups yet</div>';return;}
+  list.innerHTML=sessionBackups.slice(0,5).map(b=>
+    `<div class="backup-item"><span style="font-size:18px">💾</span><div style="flex:1"><div style="font-weight:600">${b.label}</div><div style="font-size:10px;color:var(--muted);font-family:var(--fm)">${b.size}</div></div></div>`
+  ).join('');
+}
+function restoreBackup(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      if(!data.employees||!data.logs) throw new Error('Invalid backup file');
+      showModal('Restore Backup?',`This will replace all current data with the backup (${data.employees.length} employees, ${data.logs.length} log entries). Current data will be lost.`,()=>{
+        employees=data.employees; logs=data.logs;
+        rebuildMatcher(); saveData(); renderDashboard();
+        showToast(`Restored: ${employees.length} employees, ${logs.length} records`);
+        refreshStorageInfo();
+      },'Restore');
+    }catch(err){showToast('Invalid backup file','error');}
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+function confirmClearData(){
+  showModal('Clear ALL Data?','This will permanently delete all employees, face data, and attendance records. This action CANNOT be undone.',()=>{
+    employees=[];logs=[];faceMatcher=null;
+    localStorage.removeItem(STORAGE_KEY);
+    renderDashboard();renderEmployees();
+    showToast('All data cleared','warn');
+    refreshStorageInfo();
+  },'Clear All Data');
+}
+
+// ════════════════════════════════════════════════════════
+//  ELECTRON PACKAGE DOWNLOAD
+// ════════════════════════════════════════════════════════
+function downloadElectronPkg(){
+  showToast('Preparing Electron package…','info');
+  setTimeout(()=>{
+    const pkg=generateElectronPkg();
+    downloadBlob(new Blob([pkg],{type:'text/plain'}),'AttendIQ_Electron_Setup.txt');
+    showToast('Setup instructions downloaded!');
+  },400);
+}
+function generateElectronPkg(){
+  return`====================================================
+  AttendIQ Face Recognition — Desktop Installation Guide
+  ====================================================
+
+  OPTION A: Run as PWA (Easiest, No Install Required)
+  ─────────────────────────────────────────────────────
+  1. Open attendiq-face.html in Google Chrome or Microsoft Edge
+  2. Look for the install icon (⊕) in the address bar
+  3. Click "Install AttendIQ"
+  4. The app opens as a standalone window with offline support
+  5. All data is saved in your browser's localStorage
+
+  OPTION B: Electron Desktop App (Windows / Mac / Linux)
+  ───────────────────────────────────────────────────────
+  Prerequisites: Node.js (https://nodejs.org) must be installed.
+
+  Step 1 — Create project folder:
+    mkdir AttendIQ && cd AttendIQ
+
+  Step 2 — Create package.json:
+  ─────────────────────────────
+  {
+    "name": "attendiq",
+    "version": "2.0.0",
+    "description": "Face Recognition Attendance System",
+    "main": "main.js",
+    "scripts": {
+      "start": "electron .",
+      "build": "electron-builder"
+    },
+    "dependencies": {},
+    "devDependencies": {
+      "electron": "^28.0.0",
+      "electron-builder": "^24.0.0"
+    },
+    "build": {
+      "appId": "com.attendiq.app",
+      "productName": "AttendIQ",
+      "win": { "target": "nsis", "icon": "icon.ico" },
+      "mac": { "target": "dmg", "icon": "icon.icns" },
+      "linux": { "target": "AppImage" }
+    }
+  }
+
+  Step 3 — Create main.js:
+  ─────────────────────────
+  const { app, BrowserWindow } = require('electron');
+  const path = require('path');
+
+  function createWindow() {
+    const win = new BrowserWindow({
+      width: 1400,
+      height: 900,
+      minWidth: 900,
+      minHeight: 600,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      },
+      titleBarStyle: 'hiddenInset',
+      title: 'AttendIQ — Face Recognition Attendance'
+    });
+    win.loadFile('src/index.html');
+  }
+
+  app.whenReady().then(createWindow);
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  Step 4 — Copy the HTML:
+    • Create folder: AttendIQ/src/
+    • Copy attendiq-face.html → AttendIQ/src/index.html
+
+  Step 5 — Install & Run:
+    npm install
+    npm start
+
+  Step 6 — Build Installer:
+    npm run build
+    → Windows: dist/AttendIQ Setup.exe
+    → Mac:     dist/AttendIQ.dmg
+    → Linux:   dist/AttendIQ.AppImage
+
+  DATA STORAGE NOTE:
+  ─────────────────
+  Data is stored in the browser's localStorage (same location
+  as when running in a browser). Use Settings → Backup to export
+  your data as a JSON file for safekeeping. The backup file can be
+  restored at any time using Settings → Restore.
+
+  SUPPORT:
+  ─────────
+  For issues, open the app's Settings page and use
+  "Save Backup" before reinstalling.
+  ====================================================`;
+}
+
+// ════════════════════════════════════════════════════════
+//  MODAL
+// ════════════════════════════════════════════════════════
+let modalCallback=null;
+function showModal(title,msg,cb,btnLabel='Confirm'){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-msg').textContent=msg;
+  document.getElementById('modal-confirm-btn').textContent=btnLabel;
+  modalCallback=cb;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-bg').classList.remove('open');modalCallback=null;}
+document.getElementById('modal-confirm-btn').onclick=()=>{if(modalCallback)modalCallback();closeModal();};
+document.getElementById('modal-bg').onclick=e=>{if(e.target===e.currentTarget)closeModal();};
+
+// ════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════
+function init(){
+  document.getElementById('page-date').textContent=
+    new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const loaded=loadData();
+  if(loaded){
+    showToast(`Data restored: ${employees.length} employees, ${logs.length} records`,'info');
+  }
+  renderDashboard();
+  loadModels();
+  startAutoSave();
+  // Save on visibility change (tab switch / close)
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden)saveData(); });
+  window.addEventListener('beforeunload',()=>saveData());
+}
+init();
+</script>
+</body>
+</html>
